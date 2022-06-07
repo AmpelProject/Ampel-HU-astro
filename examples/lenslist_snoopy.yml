@@ -1,0 +1,128 @@
+name: LenslistSnoopy
+
+mongo:
+  prefix: AmpelDemo
+
+channel:
+- channel: LensTest
+  access: [ZTF, ZTF_PUB, ZTF_PRIV]
+  version: 0.1
+  policy: []
+
+task:
+
+
+- title: IngestLensList
+  unit: AlertConsumer
+  config:
+    iter_max: 1000000
+    supplier:
+      unit: ZiAlertSupplier
+      config:
+        deserialize: null
+        loader:
+          unit: ZTFArchiveAlertLoader
+          config:
+            archive: https://ampel.zeuthen.desy.de/api/ztf/archive/v3
+            stream: 3pmQWH-SGB6kcyPNNCAiopx4DlnVuguQF8cC4pXGXds
+    shaper: ZiDataPointShaper
+    directives:
+    - channel: LensTest
+      ingest:
+        mux:
+          combine:
+          - state_t2:
+            - config: &digest_redshift_config
+                max_redshift_category: 7
+                t2_dependency:
+                - config: &lenscatalog_match_config
+                    catalogs:
+                      SDSS_spec:
+                        keys_to_append:
+                        - z
+                        - bptclass
+                        - subclass
+                        rs_arcsec: 10
+                        use: extcats
+                        all: false
+                      LSPhotoZZou:
+                        keys_to_append:
+                        - photoz
+                        - ra
+                        - dec
+                        - e_photoz
+                        - specz
+                        - '_6'
+                        - logMassBest
+                        - logMassInf
+                        - logMassSup
+                        rs_arcsec: 10
+                        use: extcats
+                        all: false
+                      GLADEv23:
+                        keys_to_append:
+                        - z
+                        - dist
+                        - dist_err
+                        - flag1
+                        - flag2
+                        - flag3
+                        rs_arcsec: 10
+                        use: extcats
+                      wiseScosPhotoz:
+                        keys_to_append:
+                        - zPhoto_Corr
+                        - ra
+                        - dec
+                        - wiseID
+                        - w1mCorr
+                        - w2mCorr
+                        rs_arcsec: 10
+                        use: extcats
+                      NEDz:
+                        keys_to_append:
+                        - ObjType
+                        - Velocity
+                        - z
+                        rs_arcsec: 10.0
+                        use: catsHTM
+                      twoMPZ:
+                        keys_to_append:
+                        - zPhoto
+                        - ra
+                        - dec
+                        - zSpec
+                        rs_arcsec: 10.0
+                        use: extcats
+                  link_override:
+                    filter: PPSFilter
+                    select: first
+                    sort: jd
+                  unit: T2CatalogMatch
+              unit: T2DigestRedshifts
+            - config:
+                snoopy_model_name: EBV_model2
+                plot_dir: /home/jnordin/tmp/LensSnoopy
+                apply_mwcorrection: true
+                max_ampelz_group: 7
+                redshift_kind: T2DigestRedshifts
+                t2_dependency:
+                - config: *digest_redshift_config
+                  unit: T2DigestRedshifts
+              unit: T2RunSnoopy
+            unit: ZiT1Combiner
+          insert:
+            point_t2:
+            - config: *lenscatalog_match_config
+              ingest:
+                filter: PPSFilter
+                select: first
+                sort: jd
+              unit: T2CatalogMatch
+          unit: ZiMongoMuxer
+
+- title: Run T2s
+  unit: T2Worker
+  config:
+    send_beacon: false
+    raise_exc: true
