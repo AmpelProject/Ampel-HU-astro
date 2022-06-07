@@ -57,7 +57,7 @@ class T2RunSnoopy(AbsTiedLightCurveT2Unit):
     # If loading redshifts from DigestRedshifts, provide the max ampel z group to make use of.
     # (note that filtering based on this can also be done for a potential t3)
     max_ampelz_group: int = 3
-    # It is also possible to use fixed redshift whenever a dynamic redshift kind is not available
+    # It is also possible to use fiPITY3LqGTmGWjt0-yviUGhIgUF1Xdr1O4TvYk1OSEqgxed redshift whenever a dynamic redshift kind is not available
     backup_z: Optional[float]
     # Finally, the provided lens redshift might be multiplied with a scale
     # Useful for lensing studies, or when trying multiple values
@@ -87,7 +87,7 @@ class T2RunSnoopy(AbsTiedLightCurveT2Unit):
 
     # The snoopy filter naming scheme is not consistent with the observatories.
     # This is used to map from ampel fid to snoopy filter name
-    filter_name_map: dict = {1:'ztf_g', 2:'ztf_r', 3:'ztf_i'}
+    filter_name_map: dict = {"1":'ztf_g', "2":'ztf_r', "3":'ztf_i'}
 
     # Which units should this be changed to
     t2_dependency: Sequence[StateT2Dependency[Literal[
@@ -206,10 +206,12 @@ class T2RunSnoopy(AbsTiedLightCurveT2Unit):
         # Check each filter for match
         lcs = {}
         for f_ampel, f_snoopy in self.filter_name_map.items():
-            dp_filter = [{'attribute': 'fid', 'operator':'==', 'value': f_ampel}]
+            dp_filter = [{'attribute': 'fid', 'operator':'==', 'value': int(f_ampel)}]
             dp_filter.extend(jd_filter)
             dps = light_curve.get_ntuples(('jd', 'magpsf', 'sigmapsf'),
                         filters=dp_filter)
+            if dps is None or len(dps)==0:
+                continue
             # Sort tuples based on jd
             dps = sorted(dps)
             df = np.asarray(dps)
@@ -288,7 +290,11 @@ class T2RunSnoopy(AbsTiedLightCurveT2Unit):
         snoopy_sn.get_restbands()
 
         # Do the fit
-        snoopy_sn.fit()
+        try:
+            snoopy_sn.fit()
+        except RuntimeError as err:
+            t2_output['RuntimeError']: err
+            return t2_output
 
         # Collect output
         t2_output['parameters'] = snoopy_sn.parameters
