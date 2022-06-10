@@ -4,10 +4,10 @@
 # License:             BSD-3-Clause
 # Author:              Jakob van Santen <jakob.van.santen@desy.de>
 # Date:                15.08.2018
-# Last Modified Date:  15.08.2018
-# Last Modified By:    Jakob van Santen <jakob.van.santen@desy.de>
+# Last Modified Date:  10.06.2022
+# Last Modified By:    Simeon Reusch <simeon.reusch@desy.de>
 
-import uuid, requests
+import uuid, requests, os
 from gzip import GzipFile
 from io import BytesIO
 from typing import Optional, Union
@@ -27,7 +27,7 @@ def strip_auth_from_url(url):
     try:
         auth = requests.utils.get_auth_from_url(url)
         scheme, netloc, path, params, query, fragment = urlparse(url)
-        netloc = netloc[(netloc.index("@") + 1):]
+        netloc = netloc[(netloc.index("@") + 1) :]
         url = urlunparse(ParseResult(scheme, netloc, path, params, query, fragment))
         return url, auth
     except KeyError:
@@ -46,6 +46,7 @@ class TransientViewDumper(AbsT3ReviewUnit):
     resources = ("desycloud",)
 
     outputfile: Optional[str] = None
+    overwrite: Optional[bool] = True
     desycloud_auth: NamedSecret[dict] = NamedSecret(label="desycloud")
 
     def post_init(self) -> None:
@@ -56,16 +57,27 @@ class TransientViewDumper(AbsT3ReviewUnit):
             assert self.resource
             self.webdav_base = self.resource["desycloud"]
             self.ocs_base = (
-                strip_path_from_url(self.resource["desycloud"]) +
-                "/ocs/v1.php/apps/files_sharing/api/v1"
+                strip_path_from_url(self.resource["desycloud"])
+                + "/ocs/v1.php/apps/files_sharing/api/v1"
             )
         else:
-            self.outfile = GzipFile(self.outputfile + ".json.gz", mode="w")
+            if self.overwrite:
+                filename = self.outputfile + ".json.gz"
+            else:
+                filename = self.outputfile + "_0.json.gz"
+                if os.path.isfile(filename):
+                    i = 1
+                    while os.path.exists(f"{self.outputfile}_{i}.json.gz"):
+                        i += 1
+                    filename = f"{self.outputfile}_{i}.json.gz"
+
+            self.outfile = GzipFile(filename, mode="w")
         # don't bother preserving immutable types
         self.encoder = AmpelEncoder(lossy=True)
 
-
-    def process(self, transients: Generator[SnapView, T3Send, None], t3s: T3Store) -> Union[UBson, UnitResult]:
+    def process(
+        self, transients: Generator[SnapView, T3Send, None], t3s: T3Store
+    ) -> Union[UBson, UnitResult]:
 
         count = 0
         for count, tran_view in enumerate(transients, 1):
@@ -79,7 +91,7 @@ class TransientViewDumper(AbsT3ReviewUnit):
             self.logger.info(self.outputfile + ".json.gz")
         else:
             assert isinstance(self.outfile.fileobj, BytesIO)
-            mb = len(self.outfile.fileobj.getvalue()) / 2.0 ** 20
+            mb = len(self.outfile.fileobj.getvalue()) / 2.0**20
             self.logger.info("{:.1f} MB of gzipped JSONy goodness".format(mb))
             self.session.put(
                 self.webdav_base + self.path,
