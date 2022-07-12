@@ -46,6 +46,7 @@ class TDESource(sncosmo.Source):
         self,
         phase: np.ndarray,
         wave: np.ndarray,
+        # add redshift as parameter
         name: str = "TDE",
         version: str = "1.0",
     ) -> None:
